@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements/serve.txt .
+RUN pip install --no-cache-dir -r serve.txt
+
+RUN addgroup --system app && adduser --system --ingroup app appuser
+
+COPY src/model.py src/serve.py ./src/
+COPY configs/ ./configs/
+
+RUN mkdir -p /app/checkpoints && chown -R appuser:app /app
+
+ENV PYTHONUNBUFFERED=1 \
+    CHECKPOINT_PATH=/app/checkpoints/classifier_v1.pt \
+    CONFIG_PATH=/app/configs/training_config.yaml
+
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health', timeout=3).status == 200 else 1)"
+
+CMD ["uvicorn", "serve:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "src"]

@@ -14,10 +14,14 @@ styles = getSampleStyleSheet()
 h1 = ParagraphStyle("H1", parent=styles["Heading1"], spaceAfter=10)
 h2 = ParagraphStyle("H2", parent=styles["Heading2"], spaceBefore=14, spaceAfter=6)
 body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=10, leading=14)
+link = ParagraphStyle("Link", parent=styles["Normal"], fontSize=11, leading=16)
 code = ParagraphStyle(
     "Code", fontName="Courier", fontSize=7.5, leading=9.5,
     backColor=colors.whitesmoke, borderPadding=6,
 )
+
+GITHUB_REPO_URL = "https://github.com/Arpit1371/mlops-pytorch-pipeline"
+FINAL_PR_URL = "https://github.com/Arpit1371/mlops-pytorch-pipeline/pull/7"
 
 doc = SimpleDocTemplate(
     "VALIDATION.pdf",
@@ -27,10 +31,20 @@ doc = SimpleDocTemplate(
 )
 
 story = []
-story.append(Paragraph("Part F: End-to-End Validation", h1))
 story.append(Paragraph(
-    "Full workflow run on a local <b>kind</b> cluster, following the exact sequence "
-    "from the assignment.", body,
+    f'Link to GitHub repository: <link href="{GITHUB_REPO_URL}" color="blue">{GITHUB_REPO_URL}</link>',
+    link,
+))
+story.append(Spacer(1, 4))
+story.append(Paragraph(
+    f'Link to final PR (includes validation screenshots): '
+    f'<link href="{FINAL_PR_URL}" color="blue">{FINAL_PR_URL}</link>',
+    link,
+))
+story.append(Spacer(1, 16))
+
+story.append(Paragraph(
+    "Full workflow run on a local <b>kind</b> cluster.", body,
 ))
 
 story.append(Paragraph("1. Apply manifests + train", h2))

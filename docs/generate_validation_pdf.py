@@ -11,6 +11,10 @@ from reportlab.platypus import (
 styles = getSampleStyleSheet()
 h1 = ParagraphStyle("H1", parent=styles["Heading1"], spaceAfter=12)
 body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=11, leading=16, spaceAfter=10)
+link = ParagraphStyle("Link", parent=styles["Normal"], fontSize=11, leading=16)
+
+GITHUB_REPO_URL = "https://github.com/Arpit1371/mlops-pytorch-pipeline"
+FINAL_PR_URL = "https://github.com/Arpit1371/mlops-pytorch-pipeline/pull/7"
 
 doc = SimpleDocTemplate(
     "VALIDATION.pdf",
@@ -20,6 +24,18 @@ doc = SimpleDocTemplate(
 )
 
 story = []
+story.append(Paragraph(
+    f'Link to GitHub repository: <link href="{GITHUB_REPO_URL}" color="blue">{GITHUB_REPO_URL}</link>',
+    link,
+))
+story.append(Spacer(1, 4))
+story.append(Paragraph(
+    f'Link to final PR (includes validation screenshots): '
+    f'<link href="{FINAL_PR_URL}" color="blue">{FINAL_PR_URL}</link>',
+    link,
+))
+story.append(Spacer(1, 18))
+
 story.append(Paragraph("What was the most challenging part?", h1))
 
 story.append(Paragraph(

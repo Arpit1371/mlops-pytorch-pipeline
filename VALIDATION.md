@@ -2,6 +2,14 @@
 
 Full workflow run on a local `kind` cluster, following the exact sequence from the assignment.
 
+## Screenshots
+
+Real terminal output, captured directly (not a reconstructed log):
+
+![Job complete, pods running, deployment describe](docs/screenshots/validation-1-job-and-deployment.png)
+
+![Health check and predict response](docs/screenshots/validation-2-predict-response.png)
+
 ## 1. Apply manifests + train
 
 ```

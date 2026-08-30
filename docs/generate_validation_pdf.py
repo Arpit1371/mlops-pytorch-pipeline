@@ -1,156 +1,72 @@
-"""One-off script to build VALIDATION.pdf from the terminal log + screenshots.
+"""One-off script to build VALIDATION.pdf: reflection write-up + screenshots.
 Not part of the application - just a documentation build helper.
 """
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Preformatted, Image, PageBreak
+    SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 )
-from reportlab.lib import colors
 
 styles = getSampleStyleSheet()
-h1 = ParagraphStyle("H1", parent=styles["Heading1"], spaceAfter=10)
-h2 = ParagraphStyle("H2", parent=styles["Heading2"], spaceBefore=14, spaceAfter=6)
-body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=10, leading=14)
-link = ParagraphStyle("Link", parent=styles["Normal"], fontSize=11, leading=16)
-code = ParagraphStyle(
-    "Code", fontName="Courier", fontSize=7.5, leading=9.5,
-    backColor=colors.whitesmoke, borderPadding=6,
-)
-
-GITHUB_REPO_URL = "https://github.com/Arpit1371/mlops-pytorch-pipeline"
-FINAL_PR_URL = "https://github.com/Arpit1371/mlops-pytorch-pipeline/pull/7"
+h1 = ParagraphStyle("H1", parent=styles["Heading1"], spaceAfter=12)
+body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=11, leading=16, spaceAfter=10)
 
 doc = SimpleDocTemplate(
     "VALIDATION.pdf",
     pagesize=letter,
-    topMargin=0.6 * inch, bottomMargin=0.6 * inch,
-    leftMargin=0.6 * inch, rightMargin=0.6 * inch,
+    topMargin=0.7 * inch, bottomMargin=0.7 * inch,
+    leftMargin=0.7 * inch, rightMargin=0.7 * inch,
 )
 
 story = []
+story.append(Paragraph("What was the most challenging part?", h1))
+
 story.append(Paragraph(
-    f'Link to GitHub repository: <link href="{GITHUB_REPO_URL}" color="blue">{GITHUB_REPO_URL}</link>',
-    link,
+    "The hardest part of this assignment wasn't writing the model or the Dockerfiles - it "
+    "was getting the actual Kubernetes training Job to run correctly, because two separate "
+    "bugs only showed up once real data hit the pipeline, not during simple builds or health "
+    "checks.", body,
 ))
-story.append(Spacer(1, 4))
 story.append(Paragraph(
-    f'Link to final PR (includes validation screenshots): '
-    f'<link href="{FINAL_PR_URL}" color="blue">{FINAL_PR_URL}</link>',
-    link,
+    "The first issue was a NumPy/PyTorch version conflict. Both requirements files pinned "
+    "torch==2.2.2 but never pinned numpy, so pip quietly installed NumPy 2.x alongside it. "
+    "The Docker image built fine, and the serving container's /health check even passed, "
+    "because none of that touches real data. But the moment the training Job tried to load "
+    "and transform an actual CIFAR-10 image, it crashed with \"RuntimeError: Numpy is not "
+    "available\" - torch 2.2.2's compiled extensions expect NumPy 1.x's ABI. The fix was one "
+    "line (numpy==1.26.4 in both requirements files), but finding it took an actual "
+    "end-to-end run, since Docker-level testing alone never exercised that code path.", body,
 ))
-story.append(Spacer(1, 16))
-
 story.append(Paragraph(
-    "Full workflow run on a local <b>kind</b> cluster.", body,
+    "The second issue was sneakier: the training Job would sit there \"Running\" for 40+ "
+    "minutes without producing a single log line, even though the pod's CPU usage looked "
+    "fully active. It wasn't crashing or restarting, just seemingly stuck. Digging into "
+    "/proc inside the pod showed the process was genuinely burning CPU the whole time, not "
+    "idle - so it wasn't a real deadlock. The actual cause was that PyTorch defaults its "
+    "internal thread pool to the machine's total CPU count (12, in this case), but the Job's "
+    "resource limit only allowed it 2 CPU-cores worth of scheduling time. Twelve threads "
+    "fighting over two cores' worth of quota meant most of the CPU time went to "
+    "context-switching overhead instead of actual computation. Setting OMP_NUM_THREADS and "
+    "MKL_NUM_THREADS to 2 (matching the CPU limit) fixed it - the same benchmark that hadn't "
+    "finished after 5+ minutes at 12 threads finished predictably once capped correctly.", body,
 ))
-
-story.append(Paragraph("1. Apply manifests + train", h2))
-story.append(Preformatted(
-"""$ kubectl apply -f k8s/namespace.yaml
-namespace/ml-training created
-
-$ kubectl apply -f k8s/configmap.yaml
-configmap/training-config created
-
-$ kubectl apply -f k8s/pvc.yaml
-persistentvolumeclaim/training-data-pvc created
-persistentvolumeclaim/checkpoints-pvc created
-
-$ kubectl apply -f k8s/training-job.yaml
-job.batch/model-training created""", code))
-
-story.append(Paragraph("2. Training completes (real, full CIFAR-10 dataset)", h2))
-story.append(Preformatted(
-"""$ kubectl logs job/model-training -n ml-training
-Files already downloaded and verified
-Files already downloaded and verified
-{"epoch": 1, "train_loss": 1.3687, "train_accuracy": 0.499, "val_loss": 1.158, "val_accuracy": 0.6032}
-{"event": "checkpoint_saved", "path": "/app/checkpoints/classifier_v1.pt"}
-{"event": "training_complete", "best_val_loss": 1.158}
-
-$ kubectl get jobs -n ml-training
-NAME             STATUS     COMPLETIONS   DURATION
-model-training   Complete   1/1           5h50m""", code))
-
-story.append(Paragraph("3. Deploy serving layer", h2))
-story.append(Preformatted(
-"""$ kubectl apply -f k8s/serving-deployment.yaml
-deployment.apps/model-serving created
-
-$ kubectl apply -f k8s/serving-service.yaml
-service/model-serving created
-
-$ kubectl apply -f k8s/hpa.yaml
-horizontalpodautoscaler.autoscaling/model-serving created""", code))
-
-story.append(Paragraph("4. Verify pods are running and healthy", h2))
-story.append(Preformatted(
-"""$ kubectl get pods -n ml-training
-NAME                             READY   STATUS      RESTARTS   AGE
-model-serving-64d79654d7-25rmv   1/1     Running     0          13m
-model-serving-64d79654d7-gkcxb   1/1     Running     0          13m
-model-training-r982t             0/1     Completed   0          16m
-
-$ kubectl describe deployment model-serving -n ml-training
-Conditions:
-  Type           Status  Reason
-  ----           ------  ------
-  Available      True    MinimumReplicasAvailable
-  Progressing    True    NewReplicaSetAvailable""", code))
-
-story.append(Paragraph("5. Test the prediction endpoint", h2))
-story.append(Preformatted(
-"""$ kubectl port-forward svc/model-serving 8080:80 -n ml-training &
-Forwarding from 127.0.0.1:8080 -> 8080
-
-$ curl http://localhost:8080/health
-{"status":"ok"}
-
-$ curl -X POST http://localhost:8080/predict -F "image=@test_image.png"
-{"predictions":[
-  {"class":"ship","probability":0.195266},
-  {"class":"truck","probability":0.16377},
-  {"class":"automobile","probability":0.113274},
-  {"class":"cat","probability":0.103262},
-  {"class":"horse","probability":0.102552},
-  {"class":"airplane","probability":0.085738},
-  {"class":"bird","probability":0.071926},
-  {"class":"deer","probability":0.06473},
-  {"class":"frog","probability":0.051797},
-  {"class":"dog","probability":0.047685}
-]}""", code))
-
-story.append(Paragraph("Issues found and fixed during validation", h2))
 story.append(Paragraph(
-    "1. <b>NumPy/PyTorch ABI mismatch</b> - torch==2.2.2 requires numpy&lt;2. Without pinning it, "
-    "pip installed NumPy 2.x and every operation touching image tensors crashed with "
-    "<i>RuntimeError: Numpy is not available</i>. Fixed by pinning numpy==1.26.4 in "
-    "requirements/train.txt and requirements/serve.txt.", body,
+    "A smaller, more mundane challenge was just how slow CPU-only training is for something "
+    "like ResNet-18 - a single epoch on the full CIFAR-10 dataset took roughly an hour even "
+    "after fixing the threading issue, which made iterating on the Kubernetes manifests slow "
+    "and required patience (and a scaled-down config) to validate the mechanics quickly "
+    "before committing to a full run.", body,
 ))
-story.append(Spacer(1, 4))
 story.append(Paragraph(
-    "2. <b>CPU thread oversubscription</b> - PyTorch defaulted its thread pool to the node's "
-    "full CPU count (12) instead of the container's 2-CPU cgroup limit, causing severe "
-    "scheduling contention. Fixed by setting OMP_NUM_THREADS/MKL_NUM_THREADS=2 in "
-    "k8s/training-job.yaml.", body,
-))
-story.append(Spacer(1, 4))
-story.append(Paragraph(
-    "3. <b>Hardware constraint</b> - CPU-only training on a 2-core limit took roughly 45 "
-    "minutes to an hour per epoch on the full CIFAR-10 dataset.", body,
+    "Overall, the biggest lesson was that Docker build success and a passing health check "
+    "don't prove a pipeline actually works - only running it against real data on real "
+    "infrastructure surfaces the failures that matter.", body,
 ))
 
 story.append(PageBreak())
-story.append(Paragraph("Screenshots (real terminal output)", h1))
-story.append(Paragraph("Job complete, pods running, deployment describe:", body))
-story.append(Spacer(1, 6))
 story.append(Image("docs/screenshots/validation-1-job-and-deployment.png", width=6.8 * inch, height=6.8 * inch * 1988 / 3456))
 story.append(PageBreak())
-story.append(Paragraph("Health check and predict response:", body))
-story.append(Spacer(1, 6))
 story.append(Image("docs/screenshots/validation-2-predict-response.png", width=6.8 * inch, height=6.8 * inch * 1984 / 3456))
 
 doc.build(story)

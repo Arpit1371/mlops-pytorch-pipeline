@@ -113,6 +113,7 @@ curl -X POST http://localhost:8080/predict -F "image=@test_image.png"
 
 - **NumPy/PyTorch ABI mismatch**: `torch==2.2.2` requires `numpy<2`. Without pinning it, pip installs NumPy 2.x as a transitive dependency and every operation touching image tensors crashes with `RuntimeError: Numpy is not available`. Fixed by pinning `numpy==1.26.4` in both `requirements/train.txt` and `requirements/serve.txt`.
 - **CPU thread oversubscription in constrained containers**: PyTorch defaults its intra-op thread pool to the node's total CPU count, not the container's cgroup CPU limit. With a 2-CPU limit but 12 threads spawned, training thrashed on scheduling contention instead of computing. Fixed by setting `OMP_NUM_THREADS`/`MKL_NUM_THREADS` to match the CPU limit in `k8s/training-job.yaml`.
+- **Hardware constraint - CPU-only training is slow**: this pipeline was validated on CPU only (no GPU access), and the training Job's resource limit caps it at 2 CPU cores. Even after fixing the thread-oversubscription issue above, a single epoch of ResNet-18 over the full CIFAR-10 dataset (50k train / 10k val images) took roughly **45 minutes to an hour**. Plan accordingly when running the full `epochs: 10` config from `k8s/configmap.yaml` - that's several hours of wall-clock time on CPU. Running on a GPU node would reduce this dramatically, but that's out of scope here (`k8s/training-job.yaml` only requests CPU/memory, no GPU resources).
 
 ## Git workflow
 
